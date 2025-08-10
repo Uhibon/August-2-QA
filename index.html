@@ -2,260 +2,228 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Flip + Swipe Slideshow (44 imgs → 22 cards)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Flip + Swipe Slideshow (Mobile • No Margins)</title>
   <style>
-    :root { --bg:#0c0f18; --fg:#f6f7fb; --muted:#a2abba; --accent:#7cc4ff; }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:radial-gradient(1200px 800px at 70% -10%, #131933 0%, var(--bg) 60%);color:var(--fg);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Apple Color Emoji","Segoe UI Emoji"}
+    /* --- Reset / Base --- */
+    html, body { height: 100%; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #fff; color: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, system-ui, sans-serif; }
 
-    .app{display:grid;grid-template-rows:auto 1fr auto;gap:10px;height:100dvh;max-width:960px;margin:0 auto;padding:16px clamp(12px,3vw,24px)}
-    header{display:flex;align-items:center;justify-content:space-between;gap:12px}
-    header h1{margin:0;font-size:clamp(1rem,1.5vw + .7rem,1.3rem);font-weight:650}
+    /* --- Full-bleed stage --- */
+    .stage { position: fixed; inset: 0; background: #fff; touch-action: pan-y; }
 
-    .slider{position:relative;overflow:hidden;border-radius:18px;background:#0f1324;box-shadow:0 10px 30px rgba(0,0,0,.45);touch-action:pan-y}
-    .track{display:flex;height:100%;transform:translateX(var(--tx,0px));transition:transform 280ms ease;will-change:transform}
-    .slide{flex:0 0 100%;display:grid;place-items:center;height:calc(100dvh - 170px);padding:clamp(10px,2vw,18px)}
+    /* --- Horizontal slider --- */
+    .track { height: 100%; display: flex; transform: translate3d(var(--tx, 0px), 0, 0); transition: transform 260ms ease; will-change: transform; }
+    .slide { flex: 0 0 100%; height: 100%; display: grid; place-items: center; }
 
-    /* Card flip */
-    .card{position:relative;width:min(92vw,860px);height:calc(100% - 8px);perspective:1400px}
-    .card .inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform 450ms cubic-bezier(.2,.7,.2,1)}
-    .card.flipped .inner{transform:rotateY(180deg)}
-    .face{position:absolute;inset:0;display:grid;place-items:center;border-radius:14px;overflow:hidden;backface-visibility:hidden;background:#0b0e1a;box-shadow:0 6px 28px rgba(0,0,0,.35)}
-    .face img{max-width:100%;max-height:100%;object-fit:contain;display:block}
-    .face.back{transform:rotateY(180deg)}
+    /* --- Flip card --- */
+    .card { position: relative; width: 100vw; height: 100dvh; perspective: 1400px; }
+    .card .inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 380ms cubic-bezier(.2,.7,.2,1); }
+    .card.flipped .inner { transform: rotateY(180deg); }
 
-    .controls{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;pointer-events:none}
-    .btn{pointer-events:auto;align-self:center;display:grid;place-items:center;height:100%;opacity:0;color:var(--fg);transition:opacity .2s}
-    .slider:hover .btn{opacity:.95}
-    .btn span{display:inline-grid;place-items:center;width:44px;height:44px;border-radius:999px;background:rgba(20,24,40,.7);box-shadow:0 8px 20px rgba(0,0,0,.35);font-size:22px;backdrop-filter:blur(4px)}
-    .btn.prev{justify-self:start}
-    .btn.next{justify-self:end}
+    .face { position: absolute; inset: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); display: grid; place-items: center; backface-visibility: hidden; background: #fff; }
+    .face.back { transform: rotateY(180deg); }
 
-    .hud{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:14px}
-    .counter{font-variant-numeric:tabular-nums;color:var(--fg)}
-    .progress{position:relative;height:6px;flex:1;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden}
-    .bar{position:absolute;inset:0 auto 0 0;width:var(--pct,0%);background:linear-gradient(90deg,#7cc4ff,#a0e0ff)}
+    .face img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
-    .footer{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:var(--muted)}
-    .hint kbd{background:rgba(255,255,255,.08);padding:2px 6px;border-radius:6px;font-size:12px}
-
-    @media (max-width:640px){.slide{height:calc(100dvh - 200px)}}
+    /* Minimal HUD (optional). Can be removed if you truly want nothing. */
+    .hud { position: fixed; left: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); font-size: 12px; opacity: .5; background: rgba(0,0,0,.05); color: #000; padding: 4px 6px; border-radius: 6px; }
   </style>
 </head>
 <body>
-  <div class="app" id="app">
-    <header>
-      <h1>Flip + Swipe Slideshow (22 cards / 44 images)</h1>
-      <div class="hud"><span class="counter" id="counter">1 / 22</span><div class="progress"><div class="bar" id="bar" style="--pct: 4.55%"></div></div></div>
-    </header>
-
-    <div class="slider" id="slider" aria-roledescription="carousel" aria-label="Flip and Swipe Cards">
-      <div class="track" id="track"></div>
-      <div class="controls" aria-hidden="true">
-        <button class="btn prev" id="prevBtn" aria-label="Previous card (←)"><span>←</span></button>
-        <button class="btn next" id="nextBtn" aria-label="Next card (→)"><span>→</span></button>
-      </div>
-    </div>
-
-    <div class="footer">
-      <div class="hint">Tap to flip. Swipe or use <kbd>←</kbd>/<kbd>→</kbd> to change cards. Press <kbd>F</kbd> for fullscreen. Loop is always on.</div>
-      <label style="opacity:.7">Front = odd image, Back = next even image</label>
-    </div>
+  <!-- Stage fills the screen, no margins/padding -->
+  <div class="stage" id="stage" aria-roledescription="carousel" aria-label="Flip & Swipe Cards">
+    <div class="track" id="track"></div>
   </div>
+  <div class="hud" id="hud">1 / 22</div>
 
   <script>
-    // ---------- Config ----------
-    const TOTAL_IMAGES = 44;               // 01.jpg ... 44.jpg
-    const CARDS = TOTAL_IMAGES / 2;        // 22
-    const IMG_PATH = (n) => `${String(n).padStart(2,'0')}.jpg`;
+    /* Config */
+    const TOTAL_IMAGES = 44; // 01.jpg - 44.jpg
+    const CARDS = TOTAL_IMAGES / 2; // 22
+    const IMG_PATH = (n) => `${String(n).padStart(2, '0')}.jpg`;
 
-    // ---------- DOM ----------
-    const slider = document.getElementById('slider');
+    /* DOM */
+    const stage = document.getElementById('stage');
     const track = document.getElementById('track');
-    const counter = document.getElementById('counter');
-    const bar = document.getElementById('bar');
-    const nextBtn = document.getElementById('nextBtn');
-    const prevBtn = document.getElementById('prevBtn');
+    const hud = document.getElementById('hud');
 
-    // ---------- Build slides (each slide = one card with front/back) ----------
+    /* Build slides */
     const slides = [];
     for (let c = 0; c < CARDS; c++) {
-      const frontNum = c * 2 + 1;        // 1,3,5,...,43
-      const backNum  = frontNum + 1;     // 2,4,6,...,44
+      const nFront = c * 2 + 1;
+      const nBack  = nFront + 1;
 
       const slide = document.createElement('section');
       slide.className = 'slide';
-      slide.setAttribute('role','group');
-      slide.setAttribute('aria-roledescription','slide');
-      slide.setAttribute('aria-label',`Card ${c+1} of ${CARDS}`);
 
       const card = document.createElement('div');
       card.className = 'card';
-      card.dataset.front = frontNum;
-      card.dataset.back = backNum;
 
       const inner = document.createElement('div');
       inner.className = 'inner';
 
-      const faceFront = document.createElement('div');
-      faceFront.className = 'face front';
+      const faceF = document.createElement('div');
+      faceF.className = 'face front';
       const imgF = document.createElement('img');
-      imgF.alt = `Card ${c+1} front (${IMG_PATH(frontNum)})`;
+      imgF.alt = `Card ${c+1} front`;
       imgF.loading = 'lazy';
-      imgF.dataset.src = IMG_PATH(frontNum);
-      faceFront.appendChild(imgF);
+      imgF.dataset.src = IMG_PATH(nFront);
+      faceF.appendChild(imgF);
 
-      const faceBack = document.createElement('div');
-      faceBack.className = 'face back';
+      const faceB = document.createElement('div');
+      faceB.className = 'face back';
       const imgB = document.createElement('img');
-      imgB.alt = `Card ${c+1} back (${IMG_PATH(backNum)})`;
+      imgB.alt = `Card ${c+1} back`;
       imgB.loading = 'lazy';
-      imgB.dataset.src = IMG_PATH(backNum);
-      faceBack.appendChild(imgB);
+      imgB.dataset.src = IMG_PATH(nBack);
+      faceB.appendChild(imgB);
 
-      inner.appendChild(faceFront);
-      inner.appendChild(faceBack);
+      inner.appendChild(faceF);
+      inner.appendChild(faceB);
       card.appendChild(inner);
       slide.appendChild(card);
       track.appendChild(slide);
       slides.push(slide);
     }
 
-    // ---------- State ----------
-    let index = 0;                // 0..CARDS-1
-    let w = slider.clientWidth;
+    /* State */
+    let index = 0; // current card
+    let w = stage.clientWidth;
     let baseTx = 0;
 
     // gesture state
     let dragging = false;
     let startX = 0;
-    let currentX = 0;
-    let tapCandidate = false;
-    let tapTimer = null;
+    let curX = 0;
+    let tapOK = false;
+    let tapTimer = 0;
 
-    const DRAG_THRESHOLD = 48;    // px to trigger slide
-    const TAP_MOVEMENT = 8;       // px wiggle allowed to count as tap
-    const TAP_TIME = 220;         // ms max press for tap
+    const DRAG_THRESHOLD = 48; // px to change card
+    const TAP_WIGGLE = 8;      // px tolerance for tap
+    const TAP_TIME = 220;      // ms max for tap
 
-    function isFlipped(cIdx){
-      return slides[cIdx].querySelector('.card').classList.contains('flipped');
-    }
-    function setFlipped(cIdx, val){
-      const card = slides[cIdx].querySelector('.card');
-      card.classList.toggle('flipped', !!val);
-    }
-
-    function preloadFace(cIdx){
-      if (cIdx < 0 || cIdx >= CARDS) return;
-      const card = slides[cIdx].querySelector('.card');
-      const imgF = card.querySelector('.front img');
-      const imgB = card.querySelector('.back img');
-      if (!imgF.src) imgF.src = imgF.dataset.src;
-      if (!imgB.src) imgB.src = imgB.dataset.src;
+    /* Helpers */
+    function faceImgs(i) {
+      const card = slides[i]?.querySelector('.card');
+      if (!card) return {};
+      return {
+        front: card.querySelector('.front img'),
+        back:  card.querySelector('.back img'),
+        card
+      };
     }
 
-    function update(){
-      w = slider.clientWidth;
+    function preload(i) {
+      if (i < 0 || i >= CARDS) return;
+      const { front, back } = faceImgs(i);
+      if (front && !front.src) front.src = front.dataset.src;
+      if (back && !back.src) back.src = back.dataset.src;
+    }
+
+    function setHud() {
+      hud.textContent = `${index + 1} / ${CARDS}`;
+    }
+
+    function setTransform(tx, withTransition = true) {
+      track.style.transition = withTransition ? 'transform 260ms ease' : 'none';
+      track.style.setProperty('--tx', `${tx}px`);
+    }
+
+    function update() {
+      w = stage.clientWidth;
       baseTx = -index * w;
-      track.style.transition = 'transform 280ms ease';
-      track.style.setProperty('--tx', `${baseTx}px`);
-      counter.textContent = `${index+1} / ${CARDS}`;
-      bar.style.setProperty('--pct', `${((index+1)/CARDS)*100}%`);
-
-      // Preload current and neighbors
-      [index-1,index,index+1].forEach(preloadFace);
+      setTransform(baseTx, true);
+      setHud();
+      // Preload current & neighbors
+      [index - 1, index, index + 1].forEach(preload);
     }
 
-    function go(n){
-      // loop
+    function go(n) {
+      // Loop
       index = (n + CARDS) % CARDS;
-      // always reset flip to front when changing cards
-      setFlipped(index, false);
+      // Always reset to front when moving
+      const { card } = faceImgs(index);
+      if (card) card.classList.remove('flipped');
       update();
     }
-    function next(){ go(index+1); }
-    function prev(){ go(index-1); }
 
-    // Resize keep alignment
-    let rTO; window.addEventListener('resize', ()=>{ clearTimeout(rTO); rTO=setTimeout(()=>{
-      track.style.transition = 'none';
-      w = slider.clientWidth; baseTx = -index * w; track.style.setProperty('--tx', `${baseTx}px`);
-    }, 100); });
+    function next() { go(index + 1); }
+    function prev() { go(index - 1); }
 
-    // Buttons
-    nextBtn.addEventListener('click', next);
-    prevBtn.addEventListener('click', prev);
+    function flip() {
+      const { card } = faceImgs(index);
+      if (card) card.classList.toggle('flipped');
+    }
 
-    // Keyboard
-    window.addEventListener('keydown', (e)=>{
-      if (e.key === 'ArrowRight') next();
-      if (e.key === 'ArrowLeft') prev();
-      if (e.key.toLowerCase() === 'f') toggleFullscreen();
-      if (e.key.toLowerCase() === ' ') flipCurrent();
+    /* Resize */
+    let rTO; window.addEventListener('resize', () => {
+      clearTimeout(rTO);
+      rTO = setTimeout(() => {
+        w = stage.clientWidth;
+        baseTx = -index * w;
+        setTransform(baseTx, false);
+      }, 100);
     });
 
-    function flipCurrent(){ setFlipped(index, !isFlipped(index)); }
-
-    // Pointer / Touch handling: distinguish tap vs swipe
-    function onPointerDown(x){
-      dragging = true; startX = x; currentX = x;
-      tapCandidate = true;
-      track.style.transition = 'none';
+    /* Pointer / Touch handlers */
+    function onDown(x) {
+      dragging = true; startX = x; curX = x;
+      tapOK = true;
       clearTimeout(tapTimer);
-      tapTimer = setTimeout(()=>{ tapCandidate = false; }, TAP_TIME);
+      tapTimer = setTimeout(() => { tapOK = false; }, TAP_TIME);
+      setTransform(baseTx, false);
     }
-    function onPointerMove(x){
-      if (!dragging) return; currentX = x;
-      const dx = currentX - startX;
-      // if movement exceeds tap wiggle, cancel tap
-      if (Math.abs(dx) > TAP_MOVEMENT) tapCandidate = false;
-      track.style.setProperty('--tx', `${baseTx + dx}px`);
+    function onMove(x) {
+      if (!dragging) return;
+      curX = x;
+      const dx = curX - startX;
+      if (Math.abs(dx) > TAP_WIGGLE) tapOK = false;
+      setTransform(baseTx + dx, false);
     }
-    function onPointerUp(){
+    function onUp() {
       if (!dragging) return; dragging = false; clearTimeout(tapTimer);
-      const dx = currentX - startX;
-      if (tapCandidate && Math.abs(dx) <= TAP_MOVEMENT){
-        // treat as tap on card: flip
-        flipCurrent();
-        // snap back position
-        track.style.transition = 'transform 220ms ease';
-        track.style.setProperty('--tx', `${baseTx}px`);
+      const dx = curX - startX;
+      if (tapOK && Math.abs(dx) <= TAP_WIGGLE) {
+        flip();
+        setTransform(baseTx, true);
         return;
       }
-      // swipe navigation
-      if (Math.abs(dx) > DRAG_THRESHOLD){
+      if (Math.abs(dx) > DRAG_THRESHOLD) {
         if (dx < 0) next(); else prev();
       } else {
-        track.style.transition = 'transform 220ms ease';
-        track.style.setProperty('--tx', `${baseTx}px`);
+        setTransform(baseTx, true);
       }
     }
 
-    // Bind events on the slider (so taps anywhere flip)
-    slider.addEventListener('mousedown', (e)=>onPointerDown(e.clientX));
-    window.addEventListener('mousemove', (e)=>onPointerMove(e.clientX));
-    window.addEventListener('mouseup', onPointerUp);
+    // Bind
+    stage.addEventListener('mousedown', (e) => onDown(e.clientX));
+    window.addEventListener('mousemove', (e) => onMove(e.clientX));
+    window.addEventListener('mouseup', onUp);
 
-    slider.addEventListener('touchstart', (e)=>onPointerDown(e.touches[0].clientX), {passive:true});
-    slider.addEventListener('touchmove', (e)=>onPointerMove(e.touches[0].clientX), {passive:true});
-    slider.addEventListener('touchend', onPointerUp);
+    stage.addEventListener('touchstart', (e) => onDown(e.touches[0].clientX), { passive: true });
+    stage.addEventListener('touchmove',  (e) => onMove(e.touches[0].clientX),  { passive: true });
+    stage.addEventListener('touchend', onUp, { passive: true });
 
-    // Double-click to fullscreen
-    slider.addEventListener('dblclick', toggleFullscreen);
-    slider.addEventListener('touchend', (e)=>{ if (e.detail===2) toggleFullscreen(); });
+    // Keyboard (desktop convenience)
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') next();
+      if (e.key === 'ArrowLeft') prev();
+      if (e.key === ' ') { e.preventDefault(); flip(); }
+    });
 
-    function toggleFullscreen(){
+    // Double-tap / double-click for fullscreen (optional)
+    stage.addEventListener('dblclick', toggleFullscreen);
+    stage.addEventListener('touchend', (e) => { if (e.detail === 2) toggleFullscreen(); }, { passive: true });
+
+    function toggleFullscreen() {
       const el = document.documentElement;
       if (!document.fullscreenElement) el.requestFullscreen?.(); else document.exitFullscreen?.();
     }
 
     // Init
-    update(); preloadFace(index);
-
-    // Expose for console
-    window.deck = { next, prev, go, flip: flipCurrent, get index(){return index;} };
+    update(); preload(index);
   </script>
 </body>
 </html>
