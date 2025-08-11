@@ -1,229 +1,226 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Flip + Swipe Slideshow (Mobile • No Margins)</title>
-  <style>
-    /* --- Reset / Base --- */
-    html, body { height: 100%; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #fff; color: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, system-ui, sans-serif; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Flip Card Slideshow</title>
+<style>
+  :root { --card-max-w: 90vw; --card-max-h: 90vh; }
 
-    /* --- Full-bleed stage --- */
-    .stage { position: fixed; inset: 0; background: #fff; touch-action: pan-y; }
+  body {
+    margin: 0;
+    font-family: sans-serif;
+    background: url('forest-background.jpg') center center / cover no-repeat fixed;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    touch-action: pan-y;
+  }
 
-    /* --- Horizontal slider --- */
-    .track { height: 100%; display: flex; transform: translate3d(var(--tx, 0px), 0, 0); transition: transform 260ms ease; will-change: transform; }
-    .slide { flex: 0 0 100%; height: 100%; display: grid; place-items: center; }
+  .slideshow-wrap {
+    position: relative;
+    width: min(900px, var(--card-max-w));
+    max-height: var(--card-max-h);
+    background: rgba(255,255,255,.9);
+    border-radius: 16px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.2);
+    padding: 56px 16px 16px; /* top room for the button */
+    box-sizing: border-box;
+    overflow: hidden;
+  }
 
-    /* --- Flip card --- */
-    .card { position: relative; width: 100vw; height: 100dvh; perspective: 1400px; }
-    .card .inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 380ms cubic-bezier(.2,.7,.2,1); }
-    .card.flipped .inner { transform: rotateY(180deg); }
+  /* Flip button */
+  .top-bar {
+    position: absolute;
+    inset: 8px 12px auto 12px;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    z-index: 5;
+  }
+  .btn {
+    appearance: none;
+    border: 0;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: #111;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  }
+  .btn:active { transform: translateY(1px); }
 
-    .face { position: absolute; inset: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); display: grid; place-items: center; backface-visibility: hidden; background: #fff; }
-    .face.back { transform: rotateY(180deg); }
+  /* Prev / Next */
+  .nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 12px 14px;
+    background: rgba(0,0,0,.5);
+    color: #fff;
+    font-size: 24px;
+    font-weight: 700;
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+    z-index: 4;
+  }
+  .nav.prev { left: 8px; }
+  .nav.next { right: 8px; }
 
-    .face img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  /* Slide & flip card */
+  .slide { display: none; }
+  .slide.active { display: block; }
 
-    /* Minimal HUD (optional). Can be removed if you truly want nothing. */
-    .hud { position: fixed; left: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); font-size: 12px; opacity: .5; background: rgba(0,0,0,.05); color: #000; padding: 4px 6px; border-radius: 6px; }
-  </style>
+  .card {
+    margin: 0 auto;
+    width: 100%;
+    max-width: 900px;
+    aspect-ratio: 3 / 2; /* keeps stable height; adjust as needed */
+    perspective: 1200px;
+  }
+  .card-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    transition: transform 400ms ease;
+    will-change: transform;
+  }
+  .card.flipped .card-inner { transform: rotateY(180deg); }
+
+  .face {
+    position: absolute;
+    inset: 0;
+    backface-visibility: hidden;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background: #fff;
+    border-radius: 12px;
+  }
+  .face img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #fff;
+  }
+  .back { transform: rotateY(180deg); }
+</style>
 </head>
 <body>
-  <!-- Stage fills the screen, no margins/padding -->
-  <div class="stage" id="stage" aria-roledescription="carousel" aria-label="Flip & Swipe Cards">
-    <div class="track" id="track"></div>
+
+<div class="slideshow-wrap" id="wrap">
+  <div class="top-bar">
+    <button id="flipBtn" class="btn">Flip</button>
   </div>
-  <div class="hud" id="hud">1 / 22</div>
 
-  <script>
-    /* Config */
-    const TOTAL_IMAGES = 44; // 01.jpg - 44.jpg
-    const CARDS = TOTAL_IMAGES / 2; // 22
-    const IMG_PATH = (n) => `${String(n).padStart(2, '0')}.jpg`;
+  <!-- Slides container -->
+  <div id="slides"></div>
 
-    /* DOM */
-    const stage = document.getElementById('stage');
-    const track = document.getElementById('track');
-    const hud = document.getElementById('hud');
+  <!-- Navigation -->
+  <div class="nav prev" id="prevBtn" aria-label="Previous">❮</div>
+  <div class="nav next" id="nextBtn" aria-label="Next">❯</div>
+</div>
 
-    /* Build slides */
-    const slides = [];
-    for (let c = 0; c < CARDS; c++) {
-      const nFront = c * 2 + 1;
-      const nBack  = nFront + 1;
+<script>
+  // === CONFIG ===
+  // Set this to your image count. Your repo has 44 images (01.jpg–44.jpg).
+  // If your set is 33 files, change to 33.
+  const TOTAL_IMAGES = 44;
 
-      const slide = document.createElement('section');
-      slide.className = 'slide';
-
-      const card = document.createElement('div');
-      card.className = 'card';
-
-      const inner = document.createElement('div');
-      inner.className = 'inner';
-
-      const faceF = document.createElement('div');
-      faceF.className = 'face front';
-      const imgF = document.createElement('img');
-      imgF.alt = `Card ${c+1} front`;
-      imgF.loading = 'lazy';
-      imgF.dataset.src = IMG_PATH(nFront);
-      faceF.appendChild(imgF);
-
-      const faceB = document.createElement('div');
-      faceB.className = 'face back';
-      const imgB = document.createElement('img');
-      imgB.alt = `Card ${c+1} back`;
-      imgB.loading = 'lazy';
-      imgB.dataset.src = IMG_PATH(nBack);
-      faceB.appendChild(imgB);
-
-      inner.appendChild(faceF);
-      inner.appendChild(faceB);
-      card.appendChild(inner);
-      slide.appendChild(card);
-      track.appendChild(slide);
-      slides.push(slide);
-    }
-
-    /* State */
-    let index = 0; // current card
-    let w = stage.clientWidth;
-    let baseTx = 0;
-
-    // gesture state
-    let dragging = false;
-    let startX = 0;
-    let curX = 0;
-    let tapOK = false;
-    let tapTimer = 0;
-
-    const DRAG_THRESHOLD = 48; // px to change card
-    const TAP_WIGGLE = 8;      // px tolerance for tap
-    const TAP_TIME = 220;      // ms max for tap
-
-    /* Helpers */
-    function faceImgs(i) {
-      const card = slides[i]?.querySelector('.card');
-      if (!card) return {};
-      return {
-        front: card.querySelector('.front img'),
-        back:  card.querySelector('.back img'),
-        card
-      };
-    }
-
-    function preload(i) {
-      if (i < 0 || i >= CARDS) return;
-      const { front, back } = faceImgs(i);
-      if (front && !front.src) front.src = front.dataset.src;
-      if (back && !back.src) back.src = back.dataset.src;
-    }
-
-    function setHud() {
-      hud.textContent = `${index + 1} / ${CARDS}`;
-    }
-
-    function setTransform(tx, withTransition = true) {
-      track.style.transition = withTransition ? 'transform 260ms ease' : 'none';
-      track.style.setProperty('--tx', `${tx}px`);
-    }
-
-    function update() {
-      w = stage.clientWidth;
-      baseTx = -index * w;
-      setTransform(baseTx, true);
-      setHud();
-      // Preload current & neighbors
-      [index - 1, index, index + 1].forEach(preload);
-    }
-
-    function go(n) {
-      // Loop
-      index = (n + CARDS) % CARDS;
-      // Always reset to front when moving
-      const { card } = faceImgs(index);
-      if (card) card.classList.remove('flipped');
-      update();
-    }
-
-    function next() { go(index + 1); }
-    function prev() { go(index - 1); }
-
-    function flip() {
-      const { card } = faceImgs(index);
-      if (card) card.classList.toggle('flipped');
-    }
-
-    /* Resize */
-    let rTO; window.addEventListener('resize', () => {
-      clearTimeout(rTO);
-      rTO = setTimeout(() => {
-        w = stage.clientWidth;
-        baseTx = -index * w;
-        setTransform(baseTx, false);
-      }, 100);
+  // Build pairs: (01,02), (03,04), ...
+  const pairs = [];
+  for (let i = 1; i <= TOTAL_IMAGES; i += 2) {
+    const frontNum = String(i).padStart(2, '0');
+    const backNum  = String(i + 1).padStart(2, '0');
+    const hasBack = (i + 1) <= TOTAL_IMAGES;
+    pairs.push({
+      front: `${frontNum}.jpg`,
+      back:  hasBack ? `${backNum}.jpg` : `${frontNum}.jpg` // fallback
     });
+  }
 
-    /* Pointer / Touch handlers */
-    function onDown(x) {
-      dragging = true; startX = x; curX = x;
-      tapOK = true;
-      clearTimeout(tapTimer);
-      tapTimer = setTimeout(() => { tapOK = false; }, TAP_TIME);
-      setTransform(baseTx, false);
+  const slidesEl = document.getElementById('slides');
+
+  // Create slides
+  pairs.forEach((p, idx) => {
+    const slide = document.createElement('div');
+    slide.className = 'slide' + (idx === 0 ? ' active' : '');
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.flipped = 'false';
+
+    const inner = document.createElement('div');
+    inner.className = 'card-inner';
+
+    const front = document.createElement('div');
+    front.className = 'face front';
+    front.innerHTML = `<img src="${p.front}" alt="Front ${idx+1}">`;
+
+    const back = document.createElement('div');
+    back.className = 'face back';
+    back.innerHTML = `<img src="${p.back}" alt="Back ${idx+1}">`;
+
+    inner.appendChild(front);
+    inner.appendChild(back);
+    card.appendChild(inner);
+    slide.appendChild(card);
+    slidesEl.appendChild(slide);
+  });
+
+  let slideIndex = 0;
+  const slideNodes = () => Array.from(document.querySelectorAll('.slide'));
+
+  function showSlide(i) {
+    const slides = slideNodes();
+    slides.forEach(s => s.classList.remove('active'));
+    slideIndex = (i + slides.length) % slides.length;
+    slides[slideIndex].classList.add('active');
+
+    // ensure card starts unflipped on new slide
+    const card = slides[slideIndex].querySelector('.card');
+    card.classList.remove('flipped');
+    card.dataset.flipped = 'false';
+  }
+
+  function flipCurrent() {
+    const slide = slideNodes()[slideIndex];
+    const card = slide.querySelector('.card');
+    const isFlipped = card.dataset.flipped === 'true';
+    card.dataset.flipped = String(!isFlipped);
+    card.classList.toggle('flipped', !isFlipped);
+  }
+
+  // Buttons
+  document.getElementById('flipBtn').addEventListener('click', flipCurrent);
+  document.getElementById('prevBtn').addEventListener('click', () => showSlide(slideIndex - 1));
+  document.getElementById('nextBtn').addEventListener('click', () => showSlide(slideIndex + 1));
+
+  // Swipe
+  const wrap = document.getElementById('wrap');
+  let startX = 0;
+  wrap.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, {passive:true});
+  wrap.addEventListener('touchend', e => {
+    const endX = e.changedTouches[0].clientX;
+    const dx = endX - startX;
+    if (Math.abs(dx) > 50) {
+      if (dx < 0) showSlide(slideIndex + 1);
+      else showSlide(slideIndex - 1);
     }
-    function onMove(x) {
-      if (!dragging) return;
-      curX = x;
-      const dx = curX - startX;
-      if (Math.abs(dx) > TAP_WIGGLE) tapOK = false;
-      setTransform(baseTx + dx, false);
-    }
-    function onUp() {
-      if (!dragging) return; dragging = false; clearTimeout(tapTimer);
-      const dx = curX - startX;
-      if (tapOK && Math.abs(dx) <= TAP_WIGGLE) {
-        flip();
-        setTransform(baseTx, true);
-        return;
-      }
-      if (Math.abs(dx) > DRAG_THRESHOLD) {
-        if (dx < 0) next(); else prev();
-      } else {
-        setTransform(baseTx, true);
-      }
-    }
+  });
 
-    // Bind
-    stage.addEventListener('mousedown', (e) => onDown(e.clientX));
-    window.addEventListener('mousemove', (e) => onMove(e.clientX));
-    window.addEventListener('mouseup', onUp);
+  // Keyboard (optional)
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') showSlide(slideIndex + 1);
+    if (e.key === 'ArrowLeft')  showSlide(slideIndex - 1);
+    if (e.key.toLowerCase() === 'f' || e.key === ' ') flipCurrent();
+  });
 
-    stage.addEventListener('touchstart', (e) => onDown(e.touches[0].clientX), { passive: true });
-    stage.addEventListener('touchmove',  (e) => onMove(e.touches[0].clientX),  { passive: true });
-    stage.addEventListener('touchend', onUp, { passive: true });
-
-    // Keyboard (desktop convenience)
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowRight') next();
-      if (e.key === 'ArrowLeft') prev();
-      if (e.key === ' ') { e.preventDefault(); flip(); }
-    });
-
-    // Double-tap / double-click for fullscreen (optional)
-    stage.addEventListener('dblclick', toggleFullscreen);
-    stage.addEventListener('touchend', (e) => { if (e.detail === 2) toggleFullscreen(); }, { passive: true });
-
-    function toggleFullscreen() {
-      const el = document.documentElement;
-      if (!document.fullscreenElement) el.requestFullscreen?.(); else document.exitFullscreen?.();
-    }
-
-    // Init
-    update(); preload(index);
-  </script>
+  // Start
+  showSlide(0);
+</script>
 </body>
 </html>
